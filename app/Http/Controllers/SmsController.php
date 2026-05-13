@@ -4,56 +4,67 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Tzsk\Sms\Facades\Sms;
+use App\Models\SmsHistory;
 
 class SmsController extends Controller
 {
+    public function index(Request $request)
+    {
+        $search = $request->search;
+
+        $messages = SmsHistory::when($search, function ($query) use ($search) {
+            $query->where('number', 'like', "%{$search}%")
+                  ->orWhere('message', 'like', "%{$search}%");
+        })
+        ->oldest()
+        ->paginate(2);
+
+        return view('sms', compact('messages'));
+    }
+
     public function sendSms(Request $request)
     {
         $request->validate([
             'number' => 'required',
-            'message' => 'required',
+            'message' => 'required|max:160',
         ]);
 
-        // Ensure number has country code
         $number = $request->number;
 
         if (!str_starts_with($number, '+')) {
-            $number = '+91' . $number; // default India
+            $number = '+91' . $number;
         }
 
         try {
+
             Sms::via('twilio')->send($request->message, function ($sms) use ($number) {
                 $sms->to($number);
             });
 
+            SmsHistory::create([
+                'number' => $number,
+                'message' => $request->message,
+                'status' => 'Sent',
+            ]);
+
             return back()->with('success', '✅ SMS sent successfully!');
+
         } catch (\Exception $e) {
-            return back()->with('error', '❌ Error: ' . $e->getMessage());
+
+            SmsHistory::create([
+                'number' => $number,
+                'message' => $request->message,
+                'status' => 'Failed',
+            ]);
+
+            return back()->with('error', '❌ ' . $e->getMessage());
         }
     }
+
+    public function destroy($id)
+    {
+        SmsHistory::findOrFail($id)->delete();
+
+        return back()->with('success', '🗑 SMS deleted successfully!');
+    }
 }
-
-
-
-// public function sendSms(Request $request)
-    // {
-    //     $request->validate([
-    //         'number' => 'required',
-    //         'message' => 'required',
-    //     ]);
-
-    //     // ✅ For testing (log)
-    //     Log::info('SMS TEST', [
-    //         'to' => $request->number,
-    //         'message' => $request->message,
-    //     ]);
-
-    //     // ✅ Correct REAL SMS syntax (if you enable later)
-    //     /*
-    //     Sms::send($request->message, function($sms) use ($request) {
-    //         $sms->to($request->number);
-    //     });
-    //     */
-
-    //     return back()->with('success', 'SMS logged successfully (not sent)');
-    // }
