@@ -353,7 +353,3 @@ PHP_Laravel12_SMS/
 ---
 
 Your PHP_Laravel12_SMS Project is now ready!
-<<<<<<< HEAD
-=======
-
->>>>>>> development
